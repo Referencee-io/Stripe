@@ -61,7 +61,7 @@ app.get("/stripe-key", (req, res) => {
   res.json({ publishableKey: stripePublishableKey });
 });
 
-app.post("/create-payment-intent", async (req, res) => {
+app.post("create-payment-intent", async (req, res) => {
   // Validar parámetros requeridos
   const required = ["amount", "currency", "email"];
   const missing = required.filter((field) => !req.body[field]);
