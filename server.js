@@ -131,6 +131,11 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log("Body:", req.body);
+  next();
+});
 // Manejo de errores global
 app.use((err, req, res, next) => {
   console.error("🔥 Error global:", err.stack);
