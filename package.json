@@ -17,7 +17,7 @@
     "stripe": "^18.3.0"
   },
   "engines": {
-    "node": "12.x"
+    "node": ">=18.0.0"
   },
   "repository": {
     "url": "https://glitch.com/edit/#!/glitch-hello-node"
