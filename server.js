@@ -83,17 +83,20 @@ app.post("/create-payment-intent", async (req, res) => {
     });
 
     const params = {
-      amount: req.body.amount,
-      currency: req.body.currency,
-      customer: customer.id,
-      payment_method_options: {
-        card: {
-          request_three_d_secure:
-            req.body.request_three_d_secure || "automatic",
-        },
-      },
-      payment_method_types: req.body.payment_method_types || ["card"],
-    };
+  amount: req.body.amount,
+  currency: req.body.currency,
+  customer: customer.id,
+  payment_method_options: {
+    card: {
+      request_three_d_secure:
+        req.body.request_three_d_secure || "automatic",
+    },
+  },
+  payment_method_types: Array.isArray(req.body.payment_method_types) && req.body.payment_method_types.length > 0
+    ? req.body.payment_method_types
+    : ["card"],
+};
+
 
     const paymentIntent = await stripe.paymentIntents.create(params);
 
@@ -101,8 +104,7 @@ app.post("/create-payment-intent", async (req, res) => {
       clientSecret: paymentIntent.client_secret,
       id: paymentIntent.id,
     });
-    console.log("La respuesta es")
-    console.log(res)
+
   } catch (error) {
     console.error("Error en PaymentIntent:", error);
     res.status(500).json({
