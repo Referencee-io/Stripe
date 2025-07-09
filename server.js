@@ -14,18 +14,38 @@ if (!stripeSecretKey || !stripeSecretKey.startsWith("sk_")) {
 
 const app = express();
 
-// Configuración de CORS mejorada
+// Configuración de CORS corregida
 app.use(
   cors({
-    origin: [
-      "https://refereence.io",
-      "https://stripe-m1l8.onrender.com",
-      "https://iodized-delicate-jupiter.glitch.me",
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:5173", // Vite
-      "http://127.0.0.1:5500", // Live Server
-    ],
+    origin: function (origin, callback) {
+      // Permite peticiones sin origin (como Postman, aplicaciones móviles)
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = [
+        "https://refereence.io",
+        "https://stripe-m1l8.onrender.com",
+        "https://iodized-delicate-jupiter.glitch.me",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5173", // Vite
+        "http://127.0.0.1:5500", // Live Server
+        "http://localhost:8080",
+        "http://localhost:5000",
+      ];
+      
+      // Permite cualquier localhost con cualquier puerto
+      if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        return callback(null, true);
+      }
+      
+      // Verifica si el origin está en la lista permitida
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      console.warn(`⚠️ CORS: Origin no permitido: ${origin}`);
+      return callback(new Error('No permitido por CORS'), false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
