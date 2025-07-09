@@ -1,154 +1,141 @@
+const bodyParser = require("body-parser");
 const express = require("express");
 const Stripe = require("stripe");
-const cors = require("cors");
+const cors = require("cors"); // Añade CORS
 
 const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY || "";
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
 
-// Validar variables de entorno
-if (!stripeSecretKey || !stripeSecretKey.startsWith("sk_")) {
-  console.error("❌ STRIPE_SECRET_KEY inválida o faltante");
-  process.exit(1);
-}
-
 const app = express();
 
-// SOLUCIÓN AL ERROR: Configuración de CORS sin wildcards
+// Configuración de CORS (permite tu frontend)
 app.use(
   cors({
     origin: [
-      "https://refereence.io",
-      "https://stripe-m1l8.onrender.com",
-      "https://iodized-delicate-jupiter.glitch.me",
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:5173",
-      "http://localhost:8080",
-      "http://localhost:5000",
-      "http://127.0.0.1:5500"
+      "https://refereence.io", // Reemplaza con tu dominio real
+      "https://stripe-m1l8.onrender.com/", // Render
+      "https://iodized-delicate-jupiter.glitch.me/",
+      "http://localhost:*", // Para desarrollo
     ],
-    credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
-// Middleware para logging de solicitudes
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
-
-// Manejo diferenciado de bodies
 app.use((req, res, next) => {
   if (req.originalUrl === "/webhook") {
-    express.raw({ type: "application/json" })(req, res, next);
+    next();
   } else {
-    express.json()(req, res, next);
+    bodyParser.json()(req, res, next);
   }
 });
 
-// Endpoints
 app.get("/", (req, res) => {
-  res.json({ message: "Servidor Stripe funcionando" });
+  res.send({ "Welcome to": "Expo's Stripe example server!" });
 });
 
 app.get("/stripe-key", (req, res) => {
-  if (!stripePublishableKey) {
-    return res.status(500).json({ error: "Stripe key no configurada" });
-  }
-  res.json({ publishableKey: stripePublishableKey });
+  res.send({ publishableKey: stripePublishableKey });
 });
 
 app.post("/create-payment-intent", async (req, res) => {
-  // Validar parámetros requeridos
-  const required = ["amount", "currency", "email"];
-  const missing = required.filter((field) => !req.body[field]);
-
-  if (missing.length > 0) {
-    return res.status(400).json({
-      error: `Faltan campos requeridos: ${missing.join(", ")}`,
-    });
-  }
+  const {
+    name,
+    email,
+    items,
+    amount,
+    currency,
+    request_three_d_secure,
+    payment_method_types = [],
+  } = req.body;
 
   const stripe = new Stripe(stripeSecretKey, {
-    apiVersion: "2023-10-16",
+    apiVersion: "2020-08-27",
+    typescript: true,
   });
 
-  try {
-    const customer = await stripe.customers.create({
-      name: req.body.name || "Cliente no proporcionado",
-      email: req.body.email,
-    });
+  const customer = await stripe.customers.create({ name, email });
 
-    const params = {
-      amount: req.body.amount,
-      currency: req.body.currency,
-      customer: customer.id,
-      payment_method_options: {
-        card: {
-          request_three_d_secure:
-            req.body.request_three_d_secure || "automatic",
-        },
+  // Create a PaymentIntent with the order amount and currency.
+  const params = {
+    amount,
+    currency,
+    customer: customer.id,
+    payment_method_options: {
+      card: {
+        request_three_d_secure: request_three_d_secure || "automatic",
       },
-      payment_method_types: req.body.payment_method_types || ["card"],
-    };
-
+      sofort: {
+        preferred_language: "en",
+      },
+    },
+    payment_method_types: payment_method_types,
+  };
+  console.log("!@# 1");
+  try {
     const paymentIntent = await stripe.paymentIntents.create(params);
-
-    res.json({
+    console.log("!@# create pi", paymentIntent);
+    // Send publishable key and PaymentIntent client_secret to client.
+    res.send({
       clientSecret: paymentIntent.client_secret,
       id: paymentIntent.id,
     });
   } catch (error) {
-    console.error("Error en PaymentIntent:", error);
-    res.status(500).json({
-      error: error.message || "Error al crear PaymentIntent",
+    console.log("!@# create error", error);
+    res.send({
+      error: error.raw.message,
     });
   }
 });
 
-// Webhook handler
-app.post("/webhook", async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  const stripe = new Stripe(stripeSecretKey);
+// Expose a endpoint as a webhook handler for asynchronous events.
+// Configure your webhook in the stripe developer dashboard:
+// https://dashboard.stripe.com/test/webhooks
+app.post(
+  "/webhook",
+  // Use body-parser to retrieve the raw body as a buffer.
+  bodyParser.raw({ type: "application/json" }),
+  async (req, res) => {
+    // Retrieve the event by verifying the signature using the raw body and secret.
+    let event;
 
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
-  } catch (err) {
-    console.error(`⚠️  Webhook error: ${err.message}`);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2020-08-27",
+      typescript: true,
+    });
 
-  switch (event.type) {
-    case "payment_intent.succeeded":
-      console.log("💰 Pago exitoso:", event.data.object.id);
-      break;
-    case "payment_intent.payment_failed":
-      console.error(
-        "❌ Pago fallido:",
-        event.data.object.last_payment_error?.message
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        req.headers["stripe-signature"] || [],
+        stripeWebhookSecret
       );
-      break;
-    default:
-      console.log(`⚠️  Evento no manejado: ${event.type}`);
+    } catch (err) {
+      console.log(`⚠️  Webhook signature verification failed.`);
+      res.sendStatus(400);
+      return;
+    }
+
+    // Extract the data from the event.
+    const data = event.data;
+    const eventType = event.type;
+
+    if (eventType === "payment_intent.succeeded") {
+      const pi = data.object;
+
+      // Funds have been captured
+      // Fulfill any orders, e-mail receipts, etc
+      // To cancel the payment after capture you will need to issue a Refund (https://stripe.com/docs/api/refunds).
+      console.log(`🔔  Webhook received: ${pi.object} ${pi.status}!`);
+      console.log("💰 Payment captured!");
+    }
+    if (eventType === "payment_intent.payment_failed") {
+      const pi = data.object;
+      console.log(`🔔  Webhook received: ${pi.object} ${pi.status}!`);
+      console.log("❌ Payment failed.");
+    }
+
+    res.sendStatus(200);
   }
+);
 
-  res.sendStatus(200);
-});
-
-// Manejo de errores global
-app.use((err, req, res, next) => {
-  console.error("🔥 Error global:", err.stack);
-  res.status(500).json({ error: "Error interno del servidor" });
-});
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`✅ Servidor funcionando en puerto ${PORT}`);
-  console.log(
-    `🔑 Clave Stripe: ${stripeSecretKey ? "Configurada" : "FALTANTE"}`
-  );
-});
+app.listen(8080, () => console.log(`Node server listening on port ${8080}!`));
