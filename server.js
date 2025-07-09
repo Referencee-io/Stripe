@@ -113,6 +113,58 @@ app.post("//create-payment-intent", async (req, res) => {
   }
 });
 
+app.post("/create-payment-intent", async (req, res) => {
+  // Validar parámetros requeridos
+  const required = ["amount", "currency", "email"];
+  const missing = required.filter((field) => !req.body[field]);
+
+  if (missing.length > 0) {
+    return res.status(400).json({
+      error: `Faltan campos requeridos: ${missing.join(", ")}`,
+    });
+  }
+
+  const stripe = new Stripe(stripeSecretKey, {
+    apiVersion: "2023-10-16",
+  });
+
+  try {
+    const customer = await stripe.customers.create({
+      name: req.body.name || "Cliente no proporcionado",
+      email: req.body.email,
+    });
+
+    const params = {
+  amount: req.body.amount,
+  currency: req.body.currency,
+  customer: customer.id,
+  payment_method_options: {
+    card: {
+      request_three_d_secure:
+        req.body.request_three_d_secure || "automatic",
+    },
+  },
+  payment_method_types: Array.isArray(req.body.payment_method_types) && req.body.payment_method_types.length > 0
+    ? req.body.payment_method_types
+    : ["card"],
+};
+
+
+    const paymentIntent = await stripe.paymentIntents.create(params);
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      id: paymentIntent.id,
+    });
+
+  } catch (error) {
+    console.error("Error en PaymentIntent:", error);
+    res.status(500).json({
+      error: error.message || "Error al crear PaymentIntent",
+    });
+  }
+});
+
 // Webhook handler
 app.post("/webhook", async (req, res) => {
   const sig = req.headers["stripe-signature"];
