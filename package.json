@@ -7,14 +7,14 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "body-parser": "^2.2.0",
     "express": "^5.1.0",
     "fastify": "^3.26.0",
     "fastify-formbody": "^5.2.0",
     "fastify-static": "^4.5.0",
     "handlebars": "^4.7.7",
     "point-of-view": "^5.0.0",
-    "stripe": "^18.3.0"
+    "stripe": "^18.3.0",
+    "cors": "^2.8.5"
   },
   "engines": {
     "node": ">=18.0.0"
