@@ -101,7 +101,8 @@ app.post("/create-payment-intent", async (req, res) => {
       clientSecret: paymentIntent.client_secret,
       id: paymentIntent.id,
     });
-    console.log(res.json)
+    console.log("La respuesta es")
+    console.log(res)
   } catch (error) {
     console.error("Error en PaymentIntent:", error);
     res.status(500).json({
